@@ -87,12 +87,13 @@ Route::controller(KategoriController::class)->group(function(){
 })->middleware('bidang:admin');
 
 
-Route::middleware(['auth', 'bidang:admin'])->group(function () {
+Route::middleware(['auth'])->group(function () {
     // Resource route untuk KegiatanController
     Route::resource('bidang/datalaporangtk', KegiatanController::class)->parameters(['datalaporangtk' => 'id_kegiatan']);
 
     // Route tambahan untuk upload file
     Route::post('bidang/datalaporangtk/{kegiatan}/upload', [KegiatanController::class, 'uploadFile'])->name('datalaporangtk.upload');
+    Route::post('bidang/datalaporangtk/hapus/{id_kegiatan}', [KegiatanController::class, 'deleteKegiatan'])->name('deleteKegiatan');
 });
 
 

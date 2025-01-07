@@ -45,11 +45,17 @@
                         <button class="btn btn-primary" data-toggle="modal" data-target="#uploadModal-{{ $kegiatan->id_kegiatan }}">
                             <i class="fas fa-upload"></i>
                         </button>
-                        <form action="{{ route('datalaporangtk.destroy', $kegiatan->id_kegiatan) }}" method="POST" class="d-inline">
+                        {{-- <form action="{{ route('datalaporangtk.destroy', $kegiatan->id_kegiatan) }}" method="POST" class="d-inline">
                             @csrf
                             @method('DELETE')
                             <button type="submit" class="btn btn-danger"><i class="fas fa-trash"></i></button>
-                        </form>
+                        </form> --}}
+                        <a href="" onclick="return confirm('Apakah anda yakin?')">
+                            <form class="p-0 m-0 btn btn-danger" method="post" action="{{route('deleteKegiatan',$kegiatan->id_kegiatan)}}">
+                                @csrf
+                                <button type="submit" class="mr-3 btn btn-danger"><i class="fas fa-trash"></i></button>
+                            </form>
+                            </a>
                     </div>
                 </div>
 

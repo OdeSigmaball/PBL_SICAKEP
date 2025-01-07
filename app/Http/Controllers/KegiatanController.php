@@ -23,7 +23,7 @@ class KegiatanController extends Controller
         // Kirim data ke view
         return view('bidang.datalaporangtk', compact('kegiatans'), ['judul' => "data laporan gtk"]);
     }
-    
+
 
     public function store(Request $request)
 {
@@ -74,6 +74,7 @@ class KegiatanController extends Controller
         $request->validate([
             'uploadFile' => 'required|file',
             'deskripsiFile' => 'nullable|string',
+            'id_kategori' => 'required|exists:kategoris,id_kategori',
         ]);
 
         $file = $request->file('uploadFile');
@@ -84,9 +85,17 @@ class KegiatanController extends Controller
         $uploadedFile = $this->googleDriveService->uploadFile($filePath, $fileName, $kegiatan->linkdrive);
 
         // Simpan laporan ke database
+        // $kegiatan->laporans()->create([
+        //     'nama_laporan' => $fileName,
+        //     'dokumen' => $uploadedFile->id,
+        // ]);
+
         $kegiatan->laporans()->create([
             'nama_laporan' => $fileName,
             'dokumen' => $uploadedFile->id,
+            'id_kegiatan' => $kegiatan->id_kegiatan,
+            'id_user' => auth()->id(), // Pastikan user ID ditambahkan
+            'id_kategori' => $request->id_kategori,
         ]);
 
         return redirect()->route('datalaporangtk.index')->with('success', 'File berhasil diupload.');
@@ -95,11 +104,20 @@ class KegiatanController extends Controller
     public function destroy(Kegiatan $kegiatan)
     {
         // Hapus folder Google Drive
-        $this->googleDriveService->deleteFile($kegiatan->linkdrive);
+        $this->googleDriveService->deleteFile($kegiatan->nama_kegiatan);
 
         // Hapus dari database
         $kegiatan->delete();
 
         return redirect()->route('datalaporangtk.index')->with('success', 'Kegiatan berhasil dihapus.');
+    }
+
+    public function deleteKegiatan(string $id){
+        $kegiatan = Kegiatan::where('id_kegiatan',$id)->delete();
+
+        if (!$kegiatan) {
+            return redirect()->back();
+        }
+        return redirect('bidang/datalaporangtk')->with('success','data berhasil di hapus!');
     }
 }
