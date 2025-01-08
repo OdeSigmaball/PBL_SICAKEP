@@ -2,9 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\User;
+use App\Models\Laporan;
+use App\Models\Kategori;
 use App\Models\Kegiatan;
-use App\Services\GoogleDriveService;
 use Illuminate\Http\Request;
+use App\Services\GoogleDriveService;
+use Illuminate\Support\Facades\Storage;
 
 class KegiatanController extends Controller
 {
@@ -17,107 +21,91 @@ class KegiatanController extends Controller
 
     public function index()
     {
-        // Ambil semua data kegiatan
+        $users = User::all();
         $kegiatans = Kegiatan::all();
+        $kategoris = Kategori::all();
 
-        // Kirim data ke view
-        return view('bidang.datalaporangtk', compact('kegiatans'), ['judul' => "data laporan gtk"]);
+        return view('bidang/datalaporangtk', compact('users', 'kegiatans', 'kategoris'), ['judul' => 'Data Laporan GTK']);
     }
-
 
     public function store(Request $request)
-{
-    $request->validate([
-        'nama_kegiatan' => 'required|string|max:255',
-        'tanggal_kegiatan' => 'required|date',
-        'lokasi_kegiatan' => 'required|string|max:255',
-        'bidang' => 'required|string|max:255',
-    ]);
+    {
+        $request->validate([
+            'nama_kegiatan' => 'required|string|max:255',
+            'tanggal_kegiatan' => 'required|date',
+            'lokasi_kegiatan' => 'required|string|max:255',
+            'bidang' => 'required|string|max:255',
+        ]);
 
-    // Tentukan ID folder induk berdasarkan bidang
-    $folderBidangMapping = [
-        'GTK' => env('GOOGLE_DRIVE_FOLDER_GTK'),
-        'PAUD' => env('GOOGLE_DRIVE_FOLDER_PAUD'),
-        'PUBLIKASI' => env('GOOGLE_DRIVE_FOLDER_PUBLIKASI'),
-        'SD_SMK' => env('GOOGLE_DRIVE_FOLDER_SD_SMK'),
-    ];
+        $folderBidangMapping = [
+            'GTK' => env('GOOGLE_DRIVE_FOLDER_GTK'),
+            'PAUD' => env('GOOGLE_DRIVE_FOLDER_PAUD'),
+            'PUBLIKASI' => env('GOOGLE_DRIVE_FOLDER_PUBLIKASI'),
+            'SD_SMP' => env('GOOGLE_DRIVE_FOLDER_SD_SMP'),
+        ];
 
-    $parentFolderId = $folderBidangMapping[$request->bidang] ?? null;
+        $parentFolderId = $folderBidangMapping[$request->bidang] ?? null;
 
-    if (!$parentFolderId) {
-        return redirect()->back()->withErrors(['error' => 'Bidang tidak valid atau folder induk tidak ditemukan.']);
+        if (!$parentFolderId) {
+            return redirect()->back()->withErrors(['error' => 'Bidang tidak valid atau folder induk tidak ditemukan.']);
+        }
+
+        try {
+            $folder = $this->googleDriveService->createFolder($request->nama_kegiatan, $parentFolderId);
+        } catch (\Exception $e) {
+            return redirect()->back()->withErrors(['error' => 'Gagal membuat folder di Google Drive: ' . $e->getMessage()]);
+        }
+
+
+        Kegiatan::create([
+            'nama_kegiatan' => $request->nama_kegiatan,
+            'tanggal_kegiatan' => $request->tanggal_kegiatan,
+            'lokasi_kegiatan' => $request->lokasi_kegiatan,
+            'bidang' => $request->bidang,
+            'linkdrive' => $folder->id,
+        ]);
+
+        return redirect()->route('laporan.create')->with('success', 'Kegiatan berhasil ditambahkan.');
     }
-
-    // Buat folder kegiatan di Google Drive
-    try {
-        $folder = $this->googleDriveService->createFolder($request->nama_kegiatan, $parentFolderId);
-    } catch (\Exception $e) {
-        return redirect()->back()->withErrors(['error' => 'Gagal membuat folder di Google Drive: ' . $e->getMessage()]);
-    }
-
-    // Simpan ke database
-    Kegiatan::create([
-        'nama_kegiatan' => $request->nama_kegiatan,
-        'tanggal_kegiatan' => $request->tanggal_kegiatan,
-        'lokasi_kegiatan' => $request->lokasi_kegiatan,
-        'bidang' => $request->bidang,
-        'linkdrive' => $folder->id,
-    ]);
-
-    return redirect()->route('datalaporangtk.index')->with('success', 'Kegiatan berhasil ditambahkan.');
-}
-
-
 
     public function uploadFile(Request $request, Kegiatan $kegiatan)
     {
-        $request->validate([
-            'uploadFile' => 'required|file',
-            'deskripsiFile' => 'nullable|string',
-            'id_kategori' => 'required|exists:kategoris,id_kategori',
+        $validated = $request->validate([
+            'nama_laporan' => 'required|string|max:255',
+            'dokumen' => 'required|file|mimes:pdf,doc,docx',
         ]);
 
-        $file = $request->file('uploadFile');
-        $filePath = $file->getPathname();
-        $fileName = $file->getClientOriginalName();
+        $file = $request->file('dokumen');
+        $filePath = "{$kegiatan->nama_kegiatan}/" . $file->getClientOriginalName();
+        $uploadedPath = Storage::disk('google')->put($filePath, file_get_contents($file));
 
-        // Upload file ke Google Drive
-        $uploadedFile = $this->googleDriveService->uploadFile($filePath, $fileName, $kegiatan->linkdrive);
-
-        // Simpan laporan ke database
-        // $kegiatan->laporans()->create([
-        //     'nama_laporan' => $fileName,
-        //     'dokumen' => $uploadedFile->id,
-        // ]);
-
-        $kegiatan->laporans()->create([
-            'nama_laporan' => $fileName,
-            'dokumen' => $uploadedFile->id,
+        $laporan = Laporan::create([
+            'nama_laporan' => $validated['nama_laporan'],
+            'dokumen' => $uploadedPath,
             'id_kegiatan' => $kegiatan->id_kegiatan,
-            'id_user' => auth()->id(), // Pastikan user ID ditambahkan
-            'id_kategori' => $request->id_kategori,
+            'id_user' => auth()->id(),
+            'id_kategori' => $request->input('id_kategori'), // Pastikan id_kategori ada di form
         ]);
 
-        return redirect()->route('datalaporangtk.index')->with('success', 'File berhasil diupload.');
+        return redirect()->back()->with('success', 'Laporan berhasil diunggah!');
     }
 
-    public function destroy(Kegiatan $kegiatan)
+    public function deleteKegiatan(string $id)
     {
-        // Hapus folder Google Drive
-        $this->googleDriveService->deleteFile($kegiatan->nama_kegiatan);
-
-        // Hapus dari database
-        $kegiatan->delete();
-
-        return redirect()->route('datalaporangtk.index')->with('success', 'Kegiatan berhasil dihapus.');
-    }
-
-    public function deleteKegiatan(string $id){
-        $kegiatan = Kegiatan::where('id_kegiatan',$id)->delete();
+        $kegiatan = Kegiatan::find($id);
 
         if (!$kegiatan) {
-            return redirect()->back();
+            return redirect()->back()->withErrors(['error' => 'Kegiatan tidak ditemukan.']);
         }
-        return redirect('bidang/datalaporangtk')->with('success','data berhasil di hapus!');
+
+        try {
+            $this->googleDriveService->deleteFile($kegiatan->linkdrive);
+        } catch (\Exception $e) {
+            return redirect()->back()->withErrors(['error' => 'Gagal menghapus folder dari Google Drive: ' . $e->getMessage()]);
+        }
+
+        $kegiatan->delete();
+
+        return redirect('bidang/datalaporangtk')->with('success', 'Data berhasil dihapus.');
     }
 }

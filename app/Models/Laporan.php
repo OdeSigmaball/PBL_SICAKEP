@@ -18,11 +18,23 @@ class Laporan extends Model
         'dokumen',
         'id_kegiatan',
         'id_user',
+        'id_media',
+        'id_kategori'
     ];
 
     // Relasi ke model Kegiatan
+    public function user()
+    {
+        return $this->belongsTo(User::class, 'id_user');
+    }
+
     public function kegiatan()
     {
         return $this->belongsTo(Kegiatan::class, 'id_kegiatan');
+    }
+
+    public function kategori()
+    {
+        return $this->belongsTo(Kategori::class, 'id_kategori');
     }
 }

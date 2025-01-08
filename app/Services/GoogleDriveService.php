@@ -2,10 +2,9 @@
 
 namespace App\Services;
 
-
+use Illuminate\Support\Facades\Log;
 use Google\Client;
 use Google\Service\Drive;
-use Illuminate\Support\Facades\Cache;
 
 class GoogleDriveService
 {
@@ -14,19 +13,16 @@ class GoogleDriveService
     public function __construct()
     {
         $client = new Client();
-        $client->setClientId('40125133392-ob420dh39u6vrre3aqegj220bs5lu919.apps.googleusercontent.com');
-        $client->setClientSecret('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');
+        $client->setClientId(env('GOOGLE_DRIVE_CLIENT_ID'));
+        $client->setClientSecret(env('GOOGLE_DRIVE_CLIENT_SECRET'));
         $client->setAccessType('offline');
         $client->addScope(Drive::DRIVE);
 
-        // Langsung tambahkan refresh token di sini
-        $refreshToken = '1//04WYnfUdECXKYCgYIARAAGAQSNwF-L9IrJSL7lqxZhuWLeayARD6TXVB6aM966pPM9vaEA3jjPsYb1v94BEmvsSlgbl-TF6r8bZ4';
+        $refreshToken = env('GOOGLE_DRIVE_REFRESH_TOKEN');
         $accessToken = $client->fetchAccessTokenWithRefreshToken($refreshToken);
 
-        // Set access token yang dihasilkan
         $client->setAccessToken($accessToken);
 
-        // Perbarui token jika sudah kedaluwarsa
         if ($client->isAccessTokenExpired()) {
             $newAccessToken = $client->fetchAccessTokenWithRefreshToken($client->getRefreshToken());
             $client->setAccessToken($newAccessToken);
@@ -36,50 +32,76 @@ class GoogleDriveService
     }
 
     public function createFolder($name, $parentId = null)
-{
-    $folderMetadata = [
-        'name' => $name,
-        'mimeType' => 'application/vnd.google-apps.folder',
-    ];
-
-    // Tambahkan parent ID jika ada
-    if ($parentId) {
-        $folderMetadata['parents'] = [$parentId];
-    }
-
-    try {
-        $folder = $this->driveService->files->create(new Drive\DriveFile($folderMetadata), [
-            'fields' => 'id',
-        ]);
-        return $folder;
-    } catch (\Exception $e) {
-        throw new \Exception("Gagal membuat folder: " . $e->getMessage());
-    }
-}
-
-
-    public function uploadFile($filePath, $fileName, $parentId)
     {
-        $fileMetadata = [
-            'name' => $fileName,
-            'parents' => [$parentId],
+        $folderMetadata = [
+            'name' => $name,
+            'mimeType' => 'application/vnd.google-apps.folder',
         ];
 
-        $content = file_get_contents($filePath);
+        if ($parentId) {
+            $folderMetadata['parents'] = [$parentId];
+        }
 
-        return $this->driveService->files->create(
-            new Drive\DriveFile($fileMetadata),
-            [
-                'data' => $content,
-                'mimeType' => mime_content_type($filePath),
-                'uploadType' => 'multipart',
-            ]
-        );
+        try {
+            $folder = $this->driveService->files->create(new Drive\DriveFile($folderMetadata), [
+                'fields' => 'id',
+            ]);
+            return $folder;
+        } catch (\Exception $e) {
+            Log::error('Failed to create folder: ' . $e->getMessage());
+            throw new \Exception("Failed to create folder: " . $e->getMessage());
+        }
+    }
+
+    public function uploadFile($file, $parentId)
+    {
+        try {
+            $fileMetadata = [
+                'name' => $file->getClientOriginalName(),
+                'parents' => [$parentId],
+            ];
+
+            $content = file_get_contents($file->getRealPath());
+
+            $uploadedFile = $this->driveService->files->create(
+                new Drive\DriveFile($fileMetadata),
+                [
+                    'data' => $content,
+                    'mimeType' => $file->getMimeType(),
+                    'uploadType' => 'multipart',
+                ]
+            );
+
+            Log::info('File uploaded to Google Drive: ', ['id' => $uploadedFile->id]);
+            return $uploadedFile;
+        } catch (\Exception $e) {
+            Log::error('Google Drive Upload Error: ' . $e->getMessage());
+            throw new \Exception("Failed to upload file to Google Drive.");
+        }
+    }
+
+    public function listFiles($query = [], $fields = 'files(id, name, mimeType)')
+    {
+        $parameters = array_merge(['fields' => $fields], $query);
+
+        try {
+            return $this->driveService->files->listFiles($parameters);
+        } catch (\Exception $e) {
+            Log::error('Failed to list files: ' . $e->getMessage());
+            throw new \Exception("Failed to list files: " . $e->getMessage());
+        }
     }
 
     public function deleteFile($fileId)
     {
-        return $this->driveService->files->delete($fileId);
+        try {
+            $this->driveService->files->delete($fileId);
+            Log::info('File deleted from Google Drive: ' . $fileId);
+        } catch (\Exception $e) {
+            Log::error('Failed to delete file: ' . $e->getMessage());
+            throw new \Exception("Failed to delete file: " . $e->getMessage());
+        }
     }
-
 }
+
+?>

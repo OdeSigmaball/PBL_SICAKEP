@@ -4,6 +4,7 @@ use GuzzleHttp\Middleware;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\GdriveController;
+use App\Http\Controllers\LaporanController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\kategoriController;
 use App\Http\Controllers\KegiatanController;
@@ -67,34 +68,64 @@ Route::get('login',function(){
 //deleteuser defined
 Route::post('edituser/{id}',[UserController::class,'deleteuser'])->name('deleteuser');
 
+Route::middleware(['auth','bidang:admin'])->group(function () {
+    Route::controller(UserController::class)->group(function() {
+        Route::get('userdata', 'index');
+        Route::post('store/user', 'store')->name('storeuser');
+        Route::get('edit/user/{id}', 'editV' )->name('edituser');
+        Route::post('update/user/{id}', 'edit')->name('updateuser');
+        Route::post('update/pass/{id}', 'editpass')->name('updatepass');
+        Route::post('delete/user/{id}', 'deleteuser')->name('deleteuser');
+    })->middleware(['auth','bidang:admin']);
 
-Route::controller(UserController::class)->group(function() {
-    Route::get('userdata', 'index');
-    Route::post('store/user', 'store')->name('storeuser');
-    Route::get('edit/user/{id}', 'editV' )->name('edituser');
-    Route::post('update/user/{id}', 'edit')->name('updateuser');
-    Route::post('update/pass/{id}', 'editpass')->name('updatepass');
-    Route::post('delete/user/{id}', 'deleteuser')->name('deleteuser');
-})->middleware(['auth','admin']);
 
-
-Route::controller(KategoriController::class)->group(function(){
-    Route::get('datakategori','index');
-    Route::get('edit/kategori/{id_kategori}','editV')->name('editkategori');
-    Route::post('store/kategori','store')->name('storekategori');
-    Route::post('update/kategori{id_kategori}','edit')->name('editkategoris');
-    Route::post('delete/kategori{id_kategori}','delete')->name('deletekategori');
-})->middleware('bidang:admin');
-
+    Route::controller(KategoriController::class)->group(function(){
+        Route::get('datakategori','index');
+        Route::get('edit/kategori/{id_kategori}','editV')->name('editkategori');
+        Route::post('store/kategori','store')->name('storekategori');
+        Route::post('update/kategori{id_kategori}','edit')->name('editkategoris');
+        Route::post('delete/kategori{id_kategori}','delete')->name('deletekategori');
+    })->middleware('bidang:admin');
+});
 
 Route::middleware(['auth'])->group(function () {
     // Resource route untuk KegiatanController
-    Route::resource('bidang/datalaporangtk', KegiatanController::class)->parameters(['datalaporangtk' => 'id_kegiatan']);
-
-    // Route tambahan untuk upload file
+    Route::get('/bidang/datalaporangtk', [KegiatanController::class, 'index'])->name('laporan.create');
+    Route::post('/bidang/datalaporangtk/store', [KegiatanController::class, 'storedok'])->name('laporan.store');
+    Route::post('/bidang/datalaporangtk', [KegiatanController::class, 'store'])->name('datalaporangtk.store');
     Route::post('bidang/datalaporangtk/{kegiatan}/upload', [KegiatanController::class, 'uploadFile'])->name('datalaporangtk.upload');
     Route::post('bidang/datalaporangtk/hapus/{id_kegiatan}', [KegiatanController::class, 'deleteKegiatan'])->name('deleteKegiatan');
 });
+
+Route::middleware(['auth'])->group(function () {
+    Route::get('/laporan/create', [LaporanController::class, 'create'])->name('laporan.create');
+    Route::post('/laporan/store', [LaporanController::class, 'storedok'])->name('laporan.store');
+
+});
+
+// Route::middleware(['auth'])->group(function () {
+//     // Resource route untuk KegiatanController
+//     Route::get('/bidang/datalaporangtk', [KegiatanController::class, 'index'])->name('datalaporangtk.index');  // Mengganti nama route menjadi 'datalaporangtk.index'
+//     Route::post('/bidang/datalaporangtk/store', [KegiatanController::class, 'storedok'])->name('datalaporangtk.store');
+//     Route::post('/bidang/datalaporangtk', [KegiatanController::class, 'store'])->name('datalaporangtk.create'); // Mengganti nama route menjadi 'datalaporangtk.create'
+//     Route::post('/bidang/datalaporangtk/{kegiatan}/upload', [KegiatanController::class, 'uploadFile'])->name('datalaporangtk.upload');
+//     Route::post('/bidang/datalaporangtk/hapus/{id_kegiatan}', [KegiatanController::class, 'deleteKegiatan'])->name('datalaporangtk.delete');
+// });
+
+// Route::middleware(['auth'])->group(function () {
+//     Route::get('/laporan/create', [LaporanController::class, 'create'])->name('laporan.create');
+//     Route::post('/laporan/store', [LaporanController::class, 'storedok'])->name('laporan.store');
+// });
+
+Route::get('upload',[GdriveController::class, 'upload']);
+
+
+
+
+
+
+
+
 
 
 require __DIR__.'/auth.php';
